@@ -1,1 +1,276 @@
-<!DOCTYPE html><html><head><title>Star Runner</title><style>body{margin:0;background:#87CEEB;display:flex;justify-content:center;align-items:center;height:100vh}canvas{border:2px solid #000}</style></head><body><canvas id="game" width="800" height="600"></canvas><script>const c=document.getElementById('game').getContext('2d');let p={x:50,y:500,w:30,h:40,dx:0,dy:0,j:false};const plat=[{x:0,y:580,w:800,h:20},{x:200,y:450,w:150,h:20},{x:450,y:380,w:150,h:20}];const goal={x:650,y:300,w:30,h:30};const k={};function loop(){p.dy+=0.6;p.x+=p.dx;p.y+=p.dy;p.j=false;plat.forEach(t=>{if(p.dy>=0&&p.y+p.h<=t.y+10&&p.y+p.h+p.dy>=t.y&&p.x+p.w>t.x&&p.x<t.x+t.w){p.y=t.y-p.h;p.dy=0;p.j=true}});if(p.x<goal.x+goal.w&&p.x+p.w>goal.x&&p.y<goal.y+goal.h&&p.y+p.h>goal.y){alert('Won!');p.x=50;p.y=500}c.clearRect(0,0,800,600);c.fillStyle='#8B4513';plat.forEach(t=>c.fillRect(t.x,t.y,t.w,t.h));c.fillStyle='#FF0000';c.fillRect(p.x,p.y,p.w,p.h);c.fillStyle='#FFD700';c.fillRect(goal.x,goal.y,goal.w,goal.h);p.dx=0;if(k.ArrowLeft)p.dx=-5;if(k.ArrowRight)p.dx=5;if(k.ArrowUp&&p.j)p.dy=-12;requestAnimationFrame(loop);}addEventListener('keydown',e=>k[e.key]=true);addEventListener('keyup',e=>k[e.key]=false);loop();</script></body></html>
+<!DOCTYPE html>
+<html>
+<head>
+<title>Star Runner RPG - The Quest for the Golden Star</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#87CEEB;font-family:Arial,sans-serif;overflow:hidden;user-select:none}
+#ui{position:absolute;top:10px;left:10px;color:#fff;font-size:20px;text-shadow:2px 2px 4px #000;z-index:10}
+#story,#gameOver{
+position:absolute;top:50%;left:50%;
+transform:translate(-50%,-50%);
+background:rgba(0,0,0,0.9);
+color:#fff;padding:30px;border-radius:10px;
+text-align:center;display:none;z-index:100
+}
+#story button,#gameOver button{
+margin-top:20px;padding:10px 30px;
+font-size:18px;background:#4CAF50;
+color:white;border:none;border-radius:5px;cursor:pointer
+}
+#nameOverlay{
+position:absolute;top:0;left:0;width:100%;height:100%;
+background:rgba(0,0,0,0.95);
+display:flex;align-items:center;justify-content:center;
+z-index:1000
+}
+#namePrompt{
+background:linear-gradient(135deg,#667eea,#764ba2);
+padding:40px;border-radius:20px;text-align:center
+}
+#namePrompt input{
+padding:15px;font-size:20px;border:none;
+border-radius:10px;width:250px;text-align:center
+}
+canvas{display:block;margin:auto;background:#87CEEB}
+</style>
+</head>
+
+<body>
+
+<div id="nameOverlay">
+  <div id="namePrompt">
+    <h1 style="color:white">🌟 Star Runner RPG 🌟</h1>
+    <p style="color:white">Enter your hero name</p>
+    <input id="playerNameInput" maxlength="15">
+    <br><br>
+    <button onclick="startAdventure()">Start</button>
+  </div>
+</div>
+
+<div id="ui">
+  <div>Level: <span id="level">1</span></div>
+  <div>Lives: <span id="lives">3</span></div>
+  <div>Score: <span id="score">0</span></div>
+</div>
+
+<div id="story">
+  <h2 id="storyTitle"></h2>
+  <p id="storyText"></p>
+  <button onclick="continueAdventure()">Continue</button>
+</div>
+
+<div id="gameOver">
+  <h2 id="gameOverTitle"></h2>
+  <p id="gameOverText"></p>
+  <button onclick="location.reload()">Restart</button>
+</div>
+
+<canvas id="gameCanvas" width="800" height="600"></canvas>
+
+<script>
+/* -------------------- CORE SETUP -------------------- */
+const canvas=document.getElementById('gameCanvas');
+const ctx=canvas.getContext('2d');
+
+let playerName='Hero';
+let currentLevel=1;
+let lives=3;
+let score=0;
+let gameRunning=false;
+let damageCooldown=0;
+let currentDialogue=null;
+let dialogueIndex=0;
+let dialogueQueue=[];
+
+const gravity=0.6, friction=0.8, jumpPower=13;
+
+/* -------------------- DATA -------------------- */
+const levels=[
+{title:'The Beginning',text:'Collect the Golden Star fragments.'},
+{title:'Dark Forest',text:'The forest watches you.'},
+{title:'Volcanic Caves',text:'Fire bends to no hero.'},
+{title:'Final Battle',text:'Face the sorcerer.'}
+];
+
+const goals=[
+{x:650,y:180},
+{x:720,y:220},
+{x:700,y:160},
+{x:360,y:120}
+];
+
+const platforms=[
+[{x:280,y:450,w:150,h:20},{x:450,y:380,w:150,h:20}],
+[{x:200,y:450,w:120,h:20},{x:500,y:350,w:120,h:20}],
+[{x:180,y:450,w:120,h:20},{x:500,y:350,w:120,h:20}],
+[{x:130,y:400,w:100,h:20},{x:300,y:350,w:150,h:20}]
+];
+
+const enemiesData=[
+[{x:320,y:230,type:'fly'}],
+[{x:180,y:430,type:'fly'}],
+[{x:400,y:380,type:'fly'}],
+[{x:520,y:230,type:'fly'}]
+];
+
+/* -------------------- PLAYER -------------------- */
+class Player{
+constructor(){
+this.width=30;this.height=40;
+this.x=50;this.y=400;
+this.dx=0;this.dy=0;
+this.grounded=false;
+}
+update(){
+this.dx*=friction;
+this.dy+=gravity;
+this.x+=this.dx;
+this.y+=this.dy;
+}
+draw(){
+ctx.fillStyle='#FFD700';
+ctx.fillRect(this.x,this.y,this.width,this.height);
+}
+}
+const player=new Player();
+
+/* -------------------- ENEMY -------------------- */
+class Enemy{
+constructor(x,y){
+this.x=x;this.y=y;
+this.dx=1;this.dy=0.5;
+this.width=30;this.height=30;
+this.dead=false;
+}
+update(){
+this.x+=this.dx;
+this.y+=this.dy;
+if(this.x<50||this.x>750)this.dx*=-1;
+if(this.y<50||this.y>550)this.dy*=-1;
+}
+draw(){
+ctx.fillStyle='#FF0000';
+ctx.fillRect(this.x,this.y,this.width,this.height);
+}
+}
+let enemies=[];
+
+/* -------------------- INIT LEVEL -------------------- */
+function initLevel(){
+player.x=50;player.y=400;
+player.dx=0;player.dy=0;
+enemies=enemiesData[currentLevel-1].map(e=>new Enemy(e.x,e.y));
+showStory();
+}
+
+/* -------------------- STORY -------------------- */
+function showStory(){
+document.getElementById('storyTitle').textContent=levels[currentLevel-1].title;
+document.getElementById('storyText').textContent=levels[currentLevel-1].text;
+document.getElementById('story').style.display='block';
+}
+function continueAdventure(){
+document.getElementById('story').style.display='none';
+gameRunning=true;
+requestAnimationFrame(gameLoop);
+}
+
+/* -------------------- GAME LOOP -------------------- */
+function gameLoop(){
+if(!gameRunning)return;
+
+ctx.clearRect(0,0,800,600);
+
+player.update();
+player.grounded=false;
+
+platforms[currentLevel-1].forEach(p=>{
+ctx.fillStyle='#8B4513';
+ctx.fillRect(p.x,p.y,p.w,p.h);
+if(player.dy>=0 &&
+player.y+player.height<=p.y+10 &&
+player.y+player.height+player.dy>=p.y &&
+player.x+player.width>p.x &&
+player.x<p.x+p.w){
+player.y=p.y-player.height;
+player.dy=0;
+player.grounded=true;
+}
+});
+
+if(player.y+player.height>=580){
+player.y=580-player.height;
+player.dy=0;
+player.grounded=true;
+}
+
+enemies.forEach(e=>{
+e.update();
+e.draw();
+if(damageCooldown===0 &&
+player.x<e.x+e.width &&
+player.x+player.width>e.x &&
+player.y<e.y+e.height &&
+player.y+player.height>e.y){
+lives--;
+damageCooldown=60;
+if(lives<=0)return gameOver(false);
+}
+});
+
+if(damageCooldown>0)damageCooldown--;
+
+player.draw();
+
+const goal=goals[currentLevel-1];
+ctx.fillStyle='#FFD700';
+ctx.fillRect(goal.x,goal.y,30,30);
+
+if(player.x<goal.x+30 &&
+player.x+player.width>goal.x &&
+player.y<goal.y+30 &&
+player.y+player.height>goal.y){
+score+=500;
+currentLevel++;
+gameRunning=false;
+if(currentLevel>levels.length)return gameOver(true);
+initLevel();
+}
+
+document.getElementById('level').textContent=currentLevel;
+document.getElementById('lives').textContent=lives;
+document.getElementById('score').textContent=score;
+
+requestAnimationFrame(gameLoop);
+}
+
+/* -------------------- GAME OVER -------------------- */
+function gameOver(won){
+gameRunning=false;
+document.getElementById('gameOver').style.display='block';
+document.getElementById('gameOverTitle').textContent=won?'Victory!':'Game Over';
+document.getElementById('gameOverText').textContent=`Final Score: ${score}`;
+}
+
+/* -------------------- INPUT -------------------- */
+window.addEventListener('keydown',e=>{
+if(e.key==='ArrowLeft')player.dx=-4;
+if(e.key==='ArrowRight')player.dx=4;
+if(e.key==='ArrowUp'&&player.grounded){
+player.dy=-jumpPower;
+player.grounded=false;
+}
+});
+
+/* -------------------- START -------------------- */
+function startAdventure(){
+playerName=document.getElementById('playerNameInput').value||'Hero';
+document.getElementById('nameOverlay').style.display='none';
+initLevel();
+}
+</script>
+
+</body>
+</html>
